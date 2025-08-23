@@ -38,6 +38,8 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    __table_args__ = {'extend_existing': True}
 
 # Pydantic Models
 class UserCreate(BaseModel):
