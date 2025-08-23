@@ -33,7 +33,9 @@ image = (
         "passlib==1.7.4",
         "python-jose==3.3.0",
         "bcrypt==4.0.1",
-        "cryptography==41.0.7"
+        "cryptography==41.0.7",
+        "email-validator==2.1.0.post1",
+        "pydantic[email]",
     ])
     .add_local_dir(".", "/root")
 )
