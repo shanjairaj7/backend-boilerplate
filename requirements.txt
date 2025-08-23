@@ -1,57 +1,31 @@
-# Core FastAPI and web framework
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
-
-# Data validation and parsing
-pydantic[email]>=2.10.0
-email-validator>=2.0.0
+# Core FastAPI and web framework (Modal compatible versions)
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
 
 # HTTP requests and APIs
-requests>=2.31.0
+requests==2.31.0
 
 # Authentication and security
-bcrypt>=4.0.0
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1
+python-jose==3.3.0
+passlib==1.7.4
 
 # Database and ORM
-sqlalchemy>=2.0.0
-alembic>=1.13.0
-psycopg2-binary>=2.9.0  # PostgreSQL adapter
-pymongo>=4.6.0          # MongoDB adapter
+sqlalchemy==2.0.23
 
 # File handling and utilities
-python-multipart>=0.0.12
-python-dotenv>=1.0.0
-aiofiles>=23.0.0
+python-multipart==0.0.6
+python-dotenv==1.0.0
 
-# Development and testing
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-httpx>=0.25.0           # For testing async APIs
-pyflakes>=3.2.0
-mypy>=1.11.2
-
-# Production and deployment
-gunicorn>=21.0.0
-redis>=5.0.0            # Caching and sessions
-celery>=5.3.0           # Background tasks
+# Modal.com deployment
+modal
 
 # Date and time handling
-python-dateutil>=2.8.0
+python-dateutil==2.8.2
 
-# Image processing (common for many apps)
-Pillow>=10.0.0
+# Email validation
+email-validator==2.1.0
 
-# Excel/CSV processing
-pandas>=2.1.0
-openpyxl>=3.1.0
-
-# Logging and monitoring
-structlog>=23.2.0
-
-# CORS handling
-fastapi-cors>=0.0.6
-
-# Rate limiting
-slowapi>=0.1.9
+# Cryptography
+cryptography==41.0.7

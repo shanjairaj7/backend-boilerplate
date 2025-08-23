@@ -1,84 +1,135 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from services import api_router
-from datetime import datetime
+"""
+Modal.com Compatible FastAPI Backend - Production Ready Boilerplate
+Main application file with dynamic Modal configuration for mass deployment
+"""
+
 import os
-from dotenv import load_dotenv
+import modal
+from datetime import datetime
 
-# Import database components for table creation
-from db_config import Base, engine
-from database.user import User  # Import User model to register it
+# Dynamic configuration for production deployment
+APP_NAME = os.getenv("MODAL_APP_NAME", "backend-api")
+APP_TITLE = os.getenv("APP_TITLE", "AI Generated Backend")
+APP_DESCRIPTION = os.getenv("APP_DESCRIPTION", "Auto-generated FastAPI backend")
+SECRET_NAME = os.getenv("MODAL_SECRET_NAME", f"{APP_NAME}-secrets")
 
-load_dotenv()
+print(f"🚀 Initializing Modal app: {APP_NAME}")
+print(f"📋 Using secret: {SECRET_NAME}")
 
-print(f"[{datetime.now()}] === MODULE IMPORT START ===")
-print(f"[{datetime.now()}] Working directory: {os.getcwd()}")
-print(f"[{datetime.now()}] Python path: {os.environ.get('PYTHONPATH', 'Not set')}")
-print(f"[{datetime.now()}] Starting FastAPI backend...")
-print(f"[{datetime.now()}] Importing modules completed")
-print(f"[{datetime.now()}] === MODULE IMPORT END ===")
+# Modal app configuration with dynamic naming
+modal_app = modal.App(APP_NAME)
+app = modal_app  # Alias for Modal deployment
 
-app = FastAPI(title="Project Backend", version="1.0.0")
-
-print(f"[{datetime.now()}] FastAPI app instance created")
-
-# Initialize database on startup
-@app.on_event("startup")
-def startup_event():
-    """Application startup event - create database tables"""
-    print(f"[{datetime.now()}] === STARTUP EVENT TRIGGERED ===")
-    print(f"[{datetime.now()}] FastAPI application starting...")
-    print(f"[{datetime.now()}] Creating database tables...")
-    
-    # Create all tables
-    Base.metadata.create_all(bind=engine)
-    print(f"[{datetime.now()}] Database tables created successfully")
-    print(f"[{datetime.now()}] === STARTUP COMPLETE ===")
-
-# CORS configuration for frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Modal image with required dependencies
+image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install([
+        "fastapi==0.104.1",
+        "uvicorn==0.24.0",
+        "pydantic==2.5.0",
+        "sqlalchemy==2.0.23",
+        "python-multipart==0.0.6",
+        "python-dotenv==1.0.0",
+        "passlib==1.7.4",
+        "python-jose==3.3.0",
+        "bcrypt==4.0.1",
+        "cryptography==41.0.7"
+    ])
+    .add_local_dir(".", "/root")
 )
 
-# Include the main router
-app.include_router(api_router)
-
-@app.get("/")
-def read_root():
-    print(f"[{datetime.now()}] GET / endpoint called")
-    print(f"[{datetime.now()}] Preparing response...")
-    response = {"status": "Backend running", "timestamp": str(datetime.now())}
-    print(f"[{datetime.now()}] Returning response: {response}")
-    return response
-
-@app.get("/health")
-def health_check():
-    print(f"[{datetime.now()}] GET /health endpoint called")
-    print(f"[{datetime.now()}] Performing health checks...")
+# Modal ASGI app with secrets and configuration
+@modal_app.function(
+    image=image,
+    secrets=[
+        modal.Secret.from_name(SECRET_NAME),  # Dynamic secret name per deployment
+    ],
+)
+@modal.asgi_app()
+def fastapi_app():
+    """Create and configure FastAPI application for Modal deployment"""
     
-    # Simulate checking various components
-    print(f"[{datetime.now()}] Checking database connection...")
-    db_status = "healthy"
+    # Import dependencies inside function for Modal compatibility
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from routes import api_router  # Import auto-discovery router registry
     
-    print(f"[{datetime.now()}] Checking API router...")
-    api_status = "healthy"
+    # Create FastAPI app with dynamic configuration
+    app = FastAPI(
+        title=APP_TITLE, 
+        version="1.0.0",
+        description=APP_DESCRIPTION
+    )
     
-    response = {
-        "status": "healthy",
-        "database": db_status,
-        "api": api_status,
-        "timestamp": str(datetime.now())
-    }
-    print(f"[{datetime.now()}] Health check complete: {response}")
-    return response
+    print(f"[{datetime.now()}] FastAPI app instance created for Modal deployment")
+    
+    # CORS configuration
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Health check endpoint (root)
+    @app.get("/")
+    def read_root():
+        return {
+            "app_name": APP_NAME,
+            "title": APP_TITLE,
+            "status": "Backend running on Modal.com",
+            "timestamp": str(datetime.now()),
+            "environment": "modal"
+        }
+    
+    @app.get("/health")
+    def health_check():
+        return {
+            "status": "healthy",
+            "service": "Backend API",
+            "platform": "Modal.com",
+            "timestamp": str(datetime.now())
+        }
+    
+    # Include auto-discovered API routes
+    app.include_router(api_router)
+    
+    print(f"[{datetime.now()}] Auto-discovered API routes included")
+    print(f"[{datetime.now()}] Modal FastAPI app configuration complete")
+    
+    return app
 
+# For local development (won't run on Modal)
 if __name__ == "__main__":
     import uvicorn
-    print(f"[{datetime.now()}] === MAIN EXECUTION STARTED ===")
-    print(f"[{datetime.now()}] Starting Uvicorn server...")
-    print(f"[{datetime.now()}] Configuration: host=0.0.0.0, port=8892")
-    uvicorn.run(app, host="0.0.0.0", port=8892)
+    
+    # Import for local development
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from routes import api_router
+    
+    # Create local app with dynamic configuration
+    local_app = FastAPI(title=f"{APP_TITLE} (Local)", version="1.0.0")
+    
+    local_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    @local_app.get("/")
+    def read_root():
+        return {"status": "Backend running locally", "timestamp": str(datetime.now())}
+    
+    @local_app.get("/health")
+    def health_check():
+        return {"status": "healthy", "environment": "local", "timestamp": str(datetime.now())}
+    
+    # Include auto-discovered routes
+    local_app.include_router(api_router)
+    
+    print(f"[{datetime.now()}] Starting local development server...")
+    uvicorn.run(local_app, host="0.0.0.0", port=8892)

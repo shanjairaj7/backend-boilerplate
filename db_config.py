@@ -9,8 +9,11 @@ from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 import os
 
-# SQLite database path - one file per project
-DATABASE_URL = "sqlite:///./app_database.db"
+# Dynamic SQLite database path - unique per deployment
+DATABASE_NAME = os.getenv("DATABASE_NAME", "app_database.db")
+DATABASE_URL = f"sqlite:///./{DATABASE_NAME}"
+
+print(f"🗄️ Using database: {DATABASE_NAME}")
 
 # Create engine with SQLite settings
 engine = create_engine(
