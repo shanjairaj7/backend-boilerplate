@@ -20,23 +20,10 @@ print(f"📋 Using secret: {SECRET_NAME}")
 modal_app = modal.App(APP_NAME)
 app = modal_app  # Alias for Modal deployment
 
-# Modal image with required dependencies
+# Modal image with dependencies from requirements.txt
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .pip_install([
-        "fastapi==0.104.1",
-        "uvicorn==0.24.0",
-        "pydantic==2.5.0",
-        "sqlalchemy==2.0.23",
-        "python-multipart==0.0.6",
-        "python-dotenv==1.0.0",
-        "passlib==1.7.4",
-        "python-jose==3.3.0",
-        "bcrypt==4.0.1",
-        "cryptography==41.0.7",
-        "email-validator==2.1.0.post1",
-        "pydantic[email]",
-    ])
+    .pip_install_from_requirements("requirements.txt")
     .add_local_dir(".", "/root")
 )
 

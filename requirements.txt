@@ -25,7 +25,8 @@ modal
 python-dateutil==2.8.2
 
 # Email validation
-email-validator==2.1.0
+email-validator==2.1.0.post1
+pydantic[email]
 
 # Cryptography
 cryptography==41.0.7

@@ -237,7 +237,23 @@ interface AuthState {
 
 ## 🔄 IMPLEMENTATION DECISION POINT
 
-**The LLM must choose ONE of these implementation paths:**
+**YOU must choose ONE of these implementation paths:**
+
+## ⚠️ CRITICAL AUTHENTICATION REQUIREMENT
+
+**If the user requests authentication implementation OR if authentication is necessary for the app functionality:**
+
+**MANDATORY**: YOU MUST implement full authentication integration with the frontend
+
+- This is NOT optional - authentication MUST be fully integrated
+- Add authentication implementation as a TODO item using `<action type="todo_create">`
+- Follow Option A instructions completely
+- Connect all frontend auth pages to real backend APIs
+- Implement JWT token management in Zustand store
+- Ensure protected routes work with real authentication
+- Test the complete authentication flow
+
+**DO NOT choose Option B (skip auth) if the user wants or needs authentication functionality**
 
 ---
 
@@ -247,7 +263,7 @@ interface AuthState {
 
 ### Step 1: Update Auth API Layer
 
-**File**: `frontend/src/api/auth_api.ts`
+**CREATE THIS FILE**: `frontend/src/api/auth_api.ts`
 
 Replace dummy logic with real backend calls:
 
@@ -277,7 +293,7 @@ export const authAPI = {
 
 ### Step 2: Enhanced Zustand Auth Store
 
-**File**: `frontend/src/stores/auth-store.ts`
+**CREATE THIS FILE**: `frontend/src/stores/auth-store.ts`
 
 Replace existing store with JWT-aware version:
 
@@ -305,7 +321,7 @@ interface AuthState {
 
 ### Step 3: Connect Auth Pages
 
-**Files**: `LoginPage.tsx`, `SignupPage.tsx`
+**UPDATE THESE FILES**: `LoginPage.tsx`, `SignupPage.tsx`
 
 - Connect form submissions to real auth store methods
 - Display loading states during API calls
@@ -314,7 +330,7 @@ interface AuthState {
 
 ### Step 4: Enhanced Protected Routes
 
-**File**: `components/protected-route.tsx`
+**UPDATE THESE FIELS**: `components/protected-route.tsx`
 
 - Check for valid, unexpired JWT tokens
 - Redirect to login if token is missing/expired
@@ -323,6 +339,7 @@ interface AuthState {
 
 ### Step 5: API Request Authentication
 
+**MAKE THIS UPDATE**
 **Pattern**: Add JWT tokens to all authenticated API requests
 
 ```typescript
@@ -342,7 +359,7 @@ fetch(url, {
 
 ### Step 1: Disable Protected Routes
 
-**File**: `App.tsx`
+**CREATE THIS FILE**: `App.tsx`
 
 Comment out all `<ProtectedRoute>` wrappers:
 
@@ -361,7 +378,7 @@ Comment out all `<ProtectedRoute>` wrappers:
 
 ### Step 2: Mock Authentication State
 
-**File**: `src/stores/auth-store.ts`
+**CREATE THIS FILE**: `src/stores/auth-store.ts`
 
 Set permanent authenticated state:
 
@@ -411,6 +428,23 @@ export const useAuthStore = create<AuthState>(() => ({
 3. **Auth Store**: Currently minimal - needs expansion for real JWT handling
 4. **Backend Ready**: All auth endpoints already implemented and tested
 5. **Decision Required**: Must choose Option A or B - cannot mix approaches
+
+## 🎯 MANDATORY TODO CREATION
+
+**When implementing authentication (Option A), YOU MUST:**
+
+1. **Create TODO Item**: Use `<action type="todo_create" id="auth_integration" priority="high" integration="true">` to track authentication implementation
+2. **Update TODO Progress**: Mark as `in_progress` when starting implementation
+3. **Complete TODO**: Mark as `completed` only when full authentication flow is working
+4. **Integration Testing**: Ensure signup, login, protected routes, and logout all function correctly
+
+**Example TODO Creation**:
+
+```xml
+<action type="todo_create" id="auth_integration" priority="high" integration="true">
+Implement full authentication integration: connect frontend auth pages to backend APIs, implement JWT token management in Zustand store, ensure protected routes work with real authentication
+</action>
+```
 
 ## Production Considerations
 
