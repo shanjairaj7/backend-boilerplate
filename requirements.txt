@@ -5,13 +5,12 @@ pydantic==2.5.0
 
 # HTTP requests and APIs
 requests==2.31.0
+httpx==0.24.1
 
 # Authentication and security
 bcrypt==4.0.1
 python-jose==3.3.0
 passlib==1.7.4
-
-# JSON file database - no external dependencies needed
 
 # File handling and utilities
 python-multipart==0.0.6
@@ -29,3 +28,7 @@ pydantic[email]
 
 # Cryptography
 cryptography==41.0.7
+
+# Additional lightweight backend essentials
+python-slugify==8.0.1
+validators==0.20.0
