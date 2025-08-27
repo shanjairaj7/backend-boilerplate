@@ -20,6 +20,9 @@ print(f"📋 Using secret: {SECRET_NAME}")
 modal_app = modal.App(APP_NAME)
 app = modal_app  # Alias for Modal deployment
 
+# Create persistent volume for JSON database
+database_volume = modal.Volume.from_name(f"{APP_NAME}-database", create_if_missing=True)
+
 # Modal image with dependencies from requirements.txt
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -33,6 +36,7 @@ image = (
     secrets=[
         modal.Secret.from_name(SECRET_NAME),  # Dynamic secret name per deployment
     ],
+    volumes={f"/root/json_data": database_volume},  # Mount persistent volume for JSON database
 )
 @modal.asgi_app()
 def fastapi_app():

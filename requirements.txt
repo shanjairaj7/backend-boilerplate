@@ -11,8 +11,7 @@ bcrypt==4.0.1
 python-jose==3.3.0
 passlib==1.7.4
 
-# Database and ORM
-sqlalchemy==2.0.23
+# JSON file database - no external dependencies needed
 
 # File handling and utilities
 python-multipart==0.0.6

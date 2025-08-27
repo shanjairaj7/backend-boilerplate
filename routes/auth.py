@@ -5,9 +5,6 @@ Contains routes, business logic, database operations, and JWT handling
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
-from sqlalchemy.sql import func
-from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
@@ -16,7 +13,7 @@ import os
 import secrets
 
 # Database imports
-from db_config import Base, get_db, create_tables
+from json_db import JsonDBSession, get_db, create_tables
 
 # Router setup
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -28,18 +25,29 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Database Model
-class User(Base):
-    __tablename__ = "users"
+# User data model for JSON storage
+class User:
+    def __init__(self, **kwargs):
+        self.id = kwargs.get('id')
+        self.username = kwargs.get('username')
+        self.email = kwargs.get('email')
+        self.hashed_password = kwargs.get('hashed_password')
+        self.is_active = kwargs.get('is_active', True)
+        self.created_at = kwargs.get('created_at')
     
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'hashed_password': self.hashed_password,
+            'is_active': self.is_active,
+            'created_at': self.created_at
+        }
     
-    __table_args__ = {'extend_existing': True}
+    @classmethod
+    def from_dict(cls, data):
+        return cls(**data)
 
 # Pydantic Models
 class UserCreate(BaseModel):
@@ -94,7 +102,7 @@ def verify_token(token: str) -> Optional[dict]:
 # Dependencies
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    db: JsonDBSession = Depends(get_db)
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -106,34 +114,33 @@ async def get_current_user(
     if token_data is None:
         raise credentials_exception
     
-    user = db.query(User).filter(User.id == token_data["user_id"]).first()
-    if user is None:
+    user_data = db.db.find_one("users", id=token_data["user_id"])
+    if user_data is None:
         raise credentials_exception
     
-    return user
+    return User.from_dict(user_data)
 
 # Routes
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+def signup(user_data: UserCreate, db: JsonDBSession = Depends(get_db)):
     # Check if username exists
-    if db.query(User).filter(User.username == user_data.username).first():
+    if db.db.exists("users", username=user_data.username):
         raise HTTPException(status_code=400, detail="Username already registered")
     
     # Check if email exists
-    if db.query(User).filter(User.email == user_data.email).first():
+    if db.db.exists("users", email=user_data.email):
         raise HTTPException(status_code=400, detail="Email already registered")
     
     # Create user
     hashed_password = hash_password(user_data.password)
-    db_user = User(
-        username=user_data.username,
-        email=user_data.email,
-        hashed_password=hashed_password
-    )
+    user_record = db.db.insert("users", {
+        "username": user_data.username,
+        "email": user_data.email,
+        "hashed_password": hashed_password,
+        "is_active": True
+    })
     
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
+    db_user = User.from_dict(user_record)
     
     # Create token
     access_token = create_access_token(
@@ -143,21 +150,23 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.from_orm(db_user)
+        user=UserResponse(**db_user.to_dict())
     )
 
 @router.post("/login", response_model=TokenResponse)
-def login(login_data: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == login_data.username).first()
+def login(login_data: UserLogin, db: JsonDBSession = Depends(get_db)):
+    user_data = db.db.find_one("users", username=login_data.username)
     
-    if not user or not verify_password(login_data.password, user.hashed_password):
+    if not user_data or not verify_password(login_data.password, user_data["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password"
         )
     
-    if not user.is_active:
+    if not user_data["is_active"]:
         raise HTTPException(status_code=400, detail="Inactive user")
+    
+    user = User.from_dict(user_data)
     
     access_token = create_access_token(
         data={"sub": str(user.id), "username": user.username}
@@ -166,12 +175,12 @@ def login(login_data: UserLogin, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=access_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse.from_orm(user)
+        user=UserResponse(**user.to_dict())
     )
 
 @router.get("/profile", response_model=UserResponse)
 def get_profile(current_user: User = Depends(get_current_user)):
-    return UserResponse.from_orm(current_user)
+    return UserResponse(**current_user.to_dict())
 
 @router.post("/logout")
 def logout(current_user: User = Depends(get_current_user)):

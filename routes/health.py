@@ -28,9 +28,14 @@ class PingResponse(BaseModel):
 def check_database() -> str:
     """Check database connectivity"""
     try:
-        from db_config import engine
-        with engine.connect():
-            return "healthy"
+        from json_db import db
+        # Try to ensure database directory exists and is writable
+        db.db_dir.mkdir(exist_ok=True)
+        # Test by checking if we can write to the directory
+        test_file = db.db_dir / "health_test.tmp"
+        test_file.write_text("test")
+        test_file.unlink()
+        return "healthy"
     except Exception:
         return "unhealthy"
 
@@ -94,8 +99,8 @@ def detailed_status():
         },
         "database": {
             "status": check_database(),
-            "type": "SQLite",
-            "path": "./app_database.db"
+            "type": "JSON File Database",
+            "path": "./json_data/"
         }
     }
 

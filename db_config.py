@@ -1,53 +1,39 @@
 """
-SQLite Database Configuration with SQLAlchemy
-Auto-created for all new projects
+JSON Database Configuration - Compatibility layer for db_config imports
+This ensures existing imports of db_config still work after JSON DB migration
 """
 
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base  
-from sqlalchemy.orm import sessionmaker
-from contextlib import contextmanager
-import os
+# Re-export JSON DB functions for compatibility
+from json_db import JsonDBSession, get_db, create_tables, drop_tables, db
 
-# Dynamic SQLite database path - unique per deployment
-DATABASE_NAME = os.getenv("DATABASE_NAME", "app_database.db")
-DATABASE_URL = f"sqlite:///./{DATABASE_NAME}"
+print(f"🗄️ Using JSON Database: {db.db_dir}")
 
-print(f"🗄️ Using database: {DATABASE_NAME}")
+# For backward compatibility with any remaining SQLAlchemy references
+class MockEngine:
+    """Mock engine for health checks that expect SQLAlchemy engine"""
+    def connect(self):
+        # Simulate a successful connection
+        return self
 
-# Create engine with SQLite settings
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}  # Required for SQLite
-)
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
-# Session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Mock engine for compatibility
+engine = MockEngine()
 
-# Base class for all ORM models
-Base = declarative_base()
+# For any remaining Base references
+class MockBase:
+    """Mock base class for compatibility"""
+    class metadata:
+        @staticmethod
+        def create_all(bind=None):
+            create_tables()
+        
+        @staticmethod
+        def drop_all(bind=None):
+            drop_tables()
 
-@contextmanager
-def get_db_session():
-    """Database session context manager for manual operations"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def get_db():
-    """FastAPI dependency injection for database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def create_tables():
-    """Create all database tables - call this in your service files"""
-    Base.metadata.create_all(bind=engine)
-
-def drop_tables():
-    """Drop all database tables - useful for testing"""
-    Base.metadata.drop_all(bind=engine)
+Base = MockBase()
