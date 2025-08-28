@@ -20,8 +20,45 @@ print(f"📋 Using secret: {SECRET_NAME}")
 modal_app = modal.App(APP_NAME)
 app = modal_app  # Alias for Modal deployment
 
-# Create persistent volume for JSON database
-database_volume = modal.Volume.from_name(f"{APP_NAME}-database", create_if_missing=True)
+# Generate Modal-compliant volume name
+def generate_volume_name(app_name: str) -> str:
+    """Generate a Modal-compliant volume name that's under 64 characters"""
+    import hashlib
+    import re
+    
+    base_name = app_name
+    suffix = "_database"  # Use underscore for volumes
+    
+    # If the full name would be too long, create a shorter version
+    full_name = f"{base_name}{suffix}"
+    if len(full_name) >= 64:
+        # Create a hash-based short name that's deterministic
+        hash_obj = hashlib.md5(app_name.encode())
+        short_hash = hash_obj.hexdigest()[:8]
+        
+        # Use first part of app_name + hash + suffix
+        max_base_length = 64 - len(suffix) - len(short_hash) - 1  # -1 for separator
+        short_base = base_name[:max_base_length].rstrip('_-')
+        full_name = f"{short_base}_{short_hash}{suffix}"
+    
+    # Ensure it's under 64 chars and valid
+    full_name = full_name[:63]  # Leave room for safety
+    
+    # Replace any invalid characters with underscores
+    full_name = re.sub(r'[^a-zA-Z0-9._-]', '_', full_name)
+    
+    # Replace consecutive separators with single underscore
+    full_name = re.sub(r'[-_]+', '_', full_name)
+    
+    # Ensure it doesn't start or end with separator
+    full_name = full_name.strip('-_')
+    
+    return full_name
+
+# Create persistent volume for JSON database with Modal-compliant name
+volume_name = generate_volume_name(APP_NAME)
+database_volume = modal.Volume.from_name(volume_name, create_if_missing=True)
+print(f"📦 Using database volume: {volume_name}")
 
 # Modal image with dependencies from requirements.txt
 image = (
