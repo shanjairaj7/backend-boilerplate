@@ -29,7 +29,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 class User:
     def __init__(self, **kwargs):
         self.id = kwargs.get('id')
-        self.username = kwargs.get('username')
+        self.name = kwargs.get('name')
         self.email = kwargs.get('email')
         self.hashed_password = kwargs.get('hashed_password')
         self.is_active = kwargs.get('is_active', True)
@@ -38,7 +38,7 @@ class User:
     def to_dict(self):
         return {
             'id': self.id,
-            'username': self.username,
+            'name': self.name,
             'email': self.email,
             'hashed_password': self.hashed_password,
             'is_active': self.is_active,
@@ -51,17 +51,17 @@ class User:
 
 # Pydantic Models
 class UserCreate(BaseModel):
-    username: str
     email: EmailStr
     password: str
+    name: str
 
 class UserLogin(BaseModel):
-    username: str
+    email: EmailStr
     password: str
 
 class UserResponse(BaseModel):
     id: int
-    username: str
+    name: str
     email: str
     is_active: bool
     created_at: datetime
@@ -92,10 +92,10 @@ def verify_token(token: str) -> Optional[dict]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
-        username = payload.get("username")
+        name = payload.get("name")
         if user_id is None:
             return None
-        return {"user_id": int(user_id), "username": username}
+        return {"user_id": int(user_id), "name": name}
     except JWTError:
         return None
 
@@ -123,9 +123,9 @@ async def get_current_user(
 # Routes
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def signup(user_data: UserCreate, db: JsonDBSession = Depends(get_db)):
-    # Check if username exists
-    if db.db.exists("users", username=user_data.username):
-        raise HTTPException(status_code=400, detail="Username already registered")
+    # Check if name exists (optional - you might want to allow duplicate names)
+    # if db.db.exists("users", name=user_data.name):
+    #     raise HTTPException(status_code=400, detail="Name already registered")
     
     # Check if email exists
     if db.db.exists("users", email=user_data.email):
@@ -134,7 +134,7 @@ def signup(user_data: UserCreate, db: JsonDBSession = Depends(get_db)):
     # Create user
     hashed_password = hash_password(user_data.password)
     user_record = db.db.insert("users", {
-        "username": user_data.username,
+        "name": user_data.name,
         "email": user_data.email,
         "hashed_password": hashed_password,
         "is_active": True
@@ -144,7 +144,7 @@ def signup(user_data: UserCreate, db: JsonDBSession = Depends(get_db)):
     
     # Create token
     access_token = create_access_token(
-        data={"sub": str(db_user.id), "username": db_user.username}
+        data={"sub": str(db_user.id), "name": db_user.name}
     )
     
     return TokenResponse(
@@ -155,12 +155,12 @@ def signup(user_data: UserCreate, db: JsonDBSession = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(login_data: UserLogin, db: JsonDBSession = Depends(get_db)):
-    user_data = db.db.find_one("users", username=login_data.username)
+    user_data = db.db.find_one("users", email=login_data.email)
     
     if not user_data or not verify_password(login_data.password, user_data["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password"
+            detail="Incorrect email or password"
         )
     
     if not user_data["is_active"]:
@@ -169,7 +169,7 @@ def login(login_data: UserLogin, db: JsonDBSession = Depends(get_db)):
     user = User.from_dict(user_data)
     
     access_token = create_access_token(
-        data={"sub": str(user.id), "username": user.username}
+        data={"sub": str(user.id), "name": user.name}
     )
     
     return TokenResponse(
@@ -184,7 +184,7 @@ def get_profile(current_user: User = Depends(get_current_user)):
 
 @router.post("/logout")
 def logout(current_user: User = Depends(get_current_user)):
-    return {"message": f"User {current_user.username} logged out successfully"}
+    return {"message": f"User {current_user.name} logged out successfully"}
 
 # Initialize database tables when module is imported
 create_tables()
