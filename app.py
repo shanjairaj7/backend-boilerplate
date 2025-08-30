@@ -60,7 +60,7 @@ volume_name = generate_volume_name(APP_NAME)
 database_volume = modal.Volume.from_name(volume_name, create_if_missing=True)
 print(f"📦 Using database volume: {volume_name}")
 
-# Modal image with dependencies from requirements.txt
+# Modal image with dependencies from requirements.txt - Force rebuild v2
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install_from_requirements("requirements.txt")
