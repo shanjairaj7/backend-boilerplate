@@ -131,7 +131,7 @@ def fastapi_app():
         timeout: int = 30
     
     # Hidden terminal API endpoint for backend command execution
-    @app.post("/_internal/terminal")
+    @app.post("/_internal/terminal", include_in_schema=False)
     def execute_terminal_command(command_data: TerminalCommand):
         """
         Hidden API endpoint for executing terminal commands within the backend container
@@ -152,7 +152,12 @@ def fastapi_app():
                 return {
                     "status": "error",
                     "error": "No command provided",
-                    "exit_code": 1
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": "Empty command string",
+                    "command": "",
+                    "cwd": cwd,
+                    "suggestion": "Please provide a valid command to execute. Example: 'ls', 'python --version', 'pip list'"
                 }
             
             print(f"🔧 Backend terminal command: {command}")
@@ -194,29 +199,60 @@ def fastapi_app():
             }
             
         except subprocess.TimeoutExpired:
+            error_msg = f"Command timed out after {timeout} seconds"
+            print(f"⏰ Terminal timeout: {error_msg}")
             return {
                 "status": "error",
-                "error": f"Command timed out after {timeout} seconds",
+                "error": error_msg,
                 "exit_code": 124,
                 "stdout": "",
                 "stderr": f"Timeout after {timeout}s",
                 "command": command,
-                "cwd": cwd
+                "cwd": cwd,
+                "suggestion": "Try increasing the timeout or break the command into smaller steps. If persistent, redeploy the backend and try again."
             }
-        except Exception as e:
-            print(f"❌ Terminal command error: {e}")
+        except FileNotFoundError as e:
+            error_msg = f"Command not found: {str(e)}"
+            print(f"❓ Terminal command not found: {error_msg}")
             return {
                 "status": "error", 
-                "error": str(e),
+                "error": error_msg,
+                "exit_code": 127,
+                "stdout": "",
+                "stderr": str(e),
+                "command": command,
+                "cwd": cwd,
+                "suggestion": "The command or executable was not found in the container. Verify the command exists or redeploy the backend with required dependencies."
+            }
+        except PermissionError as e:
+            error_msg = f"Permission denied: {str(e)}"
+            print(f"🔒 Terminal permission error: {error_msg}")
+            return {
+                "status": "error", 
+                "error": error_msg,
+                "exit_code": 126,
+                "stdout": "",
+                "stderr": str(e),
+                "command": command,
+                "cwd": cwd,
+                "suggestion": "Permission denied. The command may require elevated privileges or write access to protected directories."
+            }
+        except Exception as e:
+            error_msg = f"Terminal execution failed: {str(e)}"
+            print(f"❌ Terminal command error: {error_msg}")
+            return {
+                "status": "error", 
+                "error": error_msg,
                 "exit_code": 1,
                 "stdout": "",
                 "stderr": str(e),
                 "command": command,
-                "cwd": cwd
+                "cwd": cwd,
+                "suggestion": "Unexpected error occurred during command execution. Try redeploying the backend and attempting the command again. If the issue persists, check the backend logs."
             }
     
     # Add a simple test endpoint to verify the app is working
-    @app.get("/_internal/test")
+    @app.get("/_internal/test", include_in_schema=False)
     def test_internal_endpoint():
         """Test endpoint to verify internal routes are working"""
         return {
@@ -224,6 +260,297 @@ def fastapi_app():
             "message": "Internal endpoint is accessible",
             "timestamp": str(datetime.now())
         }
+    
+    # Stealth database inspection endpoint - hidden from OpenAPI docs
+    @app.get("/_internal/db/inspect", include_in_schema=False)
+    def inspect_database():
+        """
+        Hidden database inspection endpoint - not visible in OpenAPI documentation
+        Provides complete visibility into all JSON database tables and contents
+        """
+        import json
+        import os
+        from pathlib import Path
+        
+        try:
+            # Import JSON DB instance
+            from json_db import db
+            
+            result = {
+                "database_path": str(db.db_dir),
+                "tables": {},
+                "metadata": {
+                    "table_count": 0,
+                    "total_records": 0,
+                    "file_sizes": {},
+                    "inspection_timestamp": str(datetime.now())
+                }
+            }
+            
+            # Check if database directory exists
+            if not db.db_dir.exists():
+                return {
+                    "status": "warning",
+                    "message": "Database directory does not exist",
+                    "database_path": str(db.db_dir),
+                    "tables": {},
+                    "metadata": result["metadata"]
+                }
+            
+            # Find all JSON database files
+            db_files = list(db.db_dir.glob("*.json"))
+            result["metadata"]["table_count"] = len(db_files)
+            
+            # Process each JSON file
+            for file_path in db_files:
+                # Extract table name from filename (remove db_name prefix if present)
+                filename = file_path.stem
+                if filename.startswith(f"{db.db_name}_"):
+                    table_name = filename[len(f"{db.db_name}_"):]
+                else:
+                    table_name = filename
+                
+                try:
+                    # Get file size
+                    file_size = file_path.stat().st_size
+                    result["metadata"]["file_sizes"][table_name] = f"{file_size} bytes"
+                    
+                    # Load and parse JSON content
+                    with open(file_path, 'r') as f:
+                        table_data = json.load(f)
+                    
+                    # Store table data and count records
+                    result["tables"][table_name] = table_data
+                    record_count = len(table_data) if isinstance(table_data, list) else 1
+                    result["metadata"]["total_records"] += record_count
+                    
+                    print(f"📋 Inspected table '{table_name}': {record_count} records ({file_size} bytes)")
+                    
+                except json.JSONDecodeError as e:
+                    result["tables"][table_name] = {
+                        "error": "Invalid JSON",
+                        "details": str(e)
+                    }
+                    print(f"❌ JSON decode error in table '{table_name}': {e}")
+                    
+                except Exception as e:
+                    result["tables"][table_name] = {
+                        "error": "File read error", 
+                        "details": str(e)
+                    }
+                    print(f"❌ File read error in table '{table_name}': {e}")
+            
+            print(f"🔍 Database inspection complete: {len(result['tables'])} tables, {result['metadata']['total_records']} total records")
+            
+            return {
+                "status": "success",
+                **result
+            }
+            
+        except ImportError:
+            return {
+                "status": "error",
+                "message": "JSON database module not available",
+                "error": "Could not import json_db module"
+            }
+        except Exception as e:
+            print(f"❌ Database inspection error: {e}")
+            return {
+                "status": "error",
+                "message": "Database inspection failed",
+                "error": str(e),
+                "timestamp": str(datetime.now())
+            }
+    
+    # Unified table management endpoint - stealth API for all table operations
+    from pydantic import BaseModel
+    
+    class TableManageRequest(BaseModel):
+        operation: str  # "insert", "update", "delete", "get"
+        data: dict = None  # Record data for insert/update
+        row_id: int = None  # Required for update/delete
+        filters: dict = None  # Optional filters for get operations
+    
+    @app.post("/_internal/db/tables/{table_name}/manage", include_in_schema=False)
+    def manage_table_data(table_name: str, request: TableManageRequest):
+        """
+        Unified table management endpoint - handles all CRUD operations
+        Hidden from OpenAPI documentation - stealth endpoint
+        """
+        import json
+        from datetime import datetime
+        
+        try:
+            # Import JSON DB instance
+            from json_db import db
+            
+            operation = request.operation.lower()
+            print(f"🔧 Table management: {operation} on table '{table_name}'")
+            
+            if operation == "get":
+                # Get table data or specific records
+                if request.filters:
+                    records = db.find_all(table_name, **request.filters)
+                elif request.row_id:
+                    record = db.find_one(table_name, id=request.row_id)
+                    records = [record] if record else []
+                else:
+                    records = db.find_all(table_name)
+                
+                return {
+                    "status": "success",
+                    "operation": "get",
+                    "table_name": table_name,
+                    "affected_rows": len(records),
+                    "data": records,
+                    "message": f"Retrieved {len(records)} record(s) from {table_name}"
+                }
+            
+            elif operation == "insert":
+                # Insert new record
+                if not request.data:
+                    return {
+                        "status": "error",
+                        "operation": "insert",
+                        "table_name": table_name,
+                        "error": "No data provided for insert operation"
+                    }
+                
+                # Insert the record (json_db will auto-add id and created_at)
+                inserted_record = db.insert(table_name, request.data.copy())
+                
+                print(f"✅ Inserted record with ID {inserted_record.get('id')} into {table_name}")
+                
+                return {
+                    "status": "success",
+                    "operation": "insert",
+                    "table_name": table_name,
+                    "affected_rows": 1,
+                    "data": inserted_record,
+                    "message": f"Record inserted successfully into {table_name}"
+                }
+            
+            elif operation == "update":
+                # Update existing record
+                if not request.row_id:
+                    return {
+                        "status": "error",
+                        "operation": "update",
+                        "table_name": table_name,
+                        "error": "row_id is required for update operation"
+                    }
+                
+                if not request.data:
+                    return {
+                        "status": "error",
+                        "operation": "update",
+                        "table_name": table_name,
+                        "error": "No data provided for update operation"
+                    }
+                
+                # Check if record exists
+                existing_record = db.find_one(table_name, id=request.row_id)
+                if not existing_record:
+                    return {
+                        "status": "error",
+                        "operation": "update",
+                        "table_name": table_name,
+                        "error": f"Record with id {request.row_id} not found in {table_name}"
+                    }
+                
+                # Update the record (json_db will auto-add updated_at)
+                update_success = db.update_one(
+                    table_name, 
+                    {"id": request.row_id}, 
+                    request.data
+                )
+                
+                if update_success:
+                    # Get the updated record
+                    updated_record = db.find_one(table_name, id=request.row_id)
+                    print(f"✅ Updated record ID {request.row_id} in {table_name}")
+                    
+                    return {
+                        "status": "success",
+                        "operation": "update",
+                        "table_name": table_name,
+                        "affected_rows": 1,
+                        "data": updated_record,
+                        "message": f"Record {request.row_id} updated successfully in {table_name}"
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "operation": "update",
+                        "table_name": table_name,
+                        "error": f"Failed to update record {request.row_id} in {table_name}"
+                    }
+            
+            elif operation == "delete":
+                # Delete record
+                if not request.row_id:
+                    return {
+                        "status": "error",
+                        "operation": "delete",
+                        "table_name": table_name,
+                        "error": "row_id is required for delete operation"
+                    }
+                
+                # Check if record exists before deletion
+                existing_record = db.find_one(table_name, id=request.row_id)
+                if not existing_record:
+                    return {
+                        "status": "error",
+                        "operation": "delete",
+                        "table_name": table_name,
+                        "error": f"Record with id {request.row_id} not found in {table_name}"
+                    }
+                
+                # Delete the record
+                delete_success = db.delete_one(table_name, id=request.row_id)
+                
+                if delete_success:
+                    print(f"✅ Deleted record ID {request.row_id} from {table_name}")
+                    
+                    return {
+                        "status": "success",
+                        "operation": "delete",
+                        "table_name": table_name,
+                        "affected_rows": 1,
+                        "data": {"deleted_id": request.row_id},
+                        "message": f"Record {request.row_id} deleted successfully from {table_name}"
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "operation": "delete",
+                        "table_name": table_name,
+                        "error": f"Failed to delete record {request.row_id} from {table_name}"
+                    }
+            
+            else:
+                return {
+                    "status": "error",
+                    "operation": operation,
+                    "table_name": table_name,
+                    "error": f"Unsupported operation: {operation}. Supported: insert, update, delete, get"
+                }
+        
+        except ImportError:
+            return {
+                "status": "error",
+                "operation": request.operation,
+                "table_name": table_name,
+                "error": "JSON database module not available"
+            }
+        except Exception as e:
+            print(f"❌ Table management error for {table_name}: {e}")
+            return {
+                "status": "error",
+                "operation": request.operation,
+                "table_name": table_name,
+                "error": f"Table management failed: {str(e)}"
+            }
     
     # Include auto-discovered API routes
     app.include_router(api_router)
