@@ -2,7 +2,7 @@
 Authentication Service - Complete Auth System in One File
 Contains routes, business logic, database operations, and JWT handling
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
@@ -13,7 +13,7 @@ import os
 import secrets
 
 # Database imports
-from json_db import JsonDBSession, get_db, create_tables
+from json_db import JsonDBSession, get_db, create_tables, db
 
 # Router setup
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -121,21 +121,27 @@ async def get_current_user(
     return User.from_dict(user_data)
 
 # Routes
-@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def signup(user_data: UserCreate, db: JsonDBSession = Depends(get_db)):
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
+async def signup(request: Request):
+    user_data = await request.json()
+    
+    # Validate required fields
+    if not user_data.get("email") or not user_data.get("password") or not user_data.get("name"):
+        raise HTTPException(status_code=400, detail="Email, password, and name are required")
+    
     # Check if name exists (optional - you might want to allow duplicate names)
-    # if db.db.exists("users", name=user_data.name):
+    # if db.db.exists("users", name=user_data.get("name")):
     #     raise HTTPException(status_code=400, detail="Name already registered")
     
-    # Check if email exists
-    if db.db.exists("users", email=user_data.email):
+    # Check if email exists (using direct db access)
+    if db.exists("users", email=user_data.get("email")):
         raise HTTPException(status_code=400, detail="Email already registered")
     
     # Create user
-    hashed_password = hash_password(user_data.password)
-    user_record = db.db.insert("users", {
-        "name": user_data.name,
-        "email": user_data.email,
+    hashed_password = hash_password(user_data["password"])
+    user_record = db.insert("users", {
+        "name": user_data["name"],
+        "email": user_data["email"],
         "hashed_password": hashed_password,
         "is_active": True
     })
@@ -147,17 +153,24 @@ def signup(user_data: UserCreate, db: JsonDBSession = Depends(get_db)):
         data={"sub": str(db_user.id), "name": db_user.name}
     )
     
-    return TokenResponse(
-        access_token=access_token,
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse(**db_user.to_dict())
-    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "user": db_user.to_dict()
+    }
 
-@router.post("/login", response_model=TokenResponse)
-def login(login_data: UserLogin, db: JsonDBSession = Depends(get_db)):
-    user_data = db.db.find_one("users", email=login_data.email)
+@router.post("/login")
+async def login(request: Request):
+    login_data = await request.json()
     
-    if not user_data or not verify_password(login_data.password, user_data["hashed_password"]):
+    # Validate required fields
+    if not login_data.get("email") or not login_data.get("password"):
+        raise HTTPException(status_code=400, detail="Email and password are required")
+    
+    user_data = db.find_one("users", email=login_data.get("email"))
+    
+    if not user_data or not verify_password(login_data["password"], user_data["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -172,15 +185,16 @@ def login(login_data: UserLogin, db: JsonDBSession = Depends(get_db)):
         data={"sub": str(user.id), "name": user.name}
     )
     
-    return TokenResponse(
-        access_token=access_token,
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserResponse(**user.to_dict())
-    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "user": user.to_dict()
+    }
 
-@router.get("/profile", response_model=UserResponse)
+@router.get("/profile")
 def get_profile(current_user: User = Depends(get_current_user)):
-    return UserResponse(**current_user.to_dict())
+    return current_user.to_dict()
 
 @router.post("/logout")
 def logout(current_user: User = Depends(get_current_user)):

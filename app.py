@@ -88,7 +88,8 @@ def fastapi_app():
     app = FastAPI(
         title=APP_TITLE, 
         version="1.0.0",
-        description=APP_DESCRIPTION
+        description=APP_DESCRIPTION,
+        redirect_slashes=False  # Disable automatic trailing slash redirects
     )
     
     print(f"[{datetime.now()}] FastAPI app instance created for Modal deployment")
