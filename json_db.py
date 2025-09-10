@@ -20,13 +20,13 @@ class JsonDB:
         self.db_dir.mkdir(parents=True, exist_ok=True)
         self.db_name = db_name
 
-    def _get_table_path(self, table_name: str) -> Path:
+    def get_table_path(self, table_name: str) -> Path:
         """Get the file path for a table"""
         return self.db_dir / f"{self.db_name}_{table_name}.json"
 
-    def _load_table(self, table_name: str) -> List[Dict[str, Any]]:
+    def load_table(self, table_name: str) -> List[Dict[str, Any]]:
         """Load data from a JSON table file"""
-        table_path = self._get_table_path(table_name)
+        table_path = self.get_table_path(table_name)
         if not table_path.exists():
             return []
 
@@ -36,22 +36,22 @@ class JsonDB:
         except (json.JSONDecodeError, FileNotFoundError):
             return []
 
-    def _save_table(self, table_name: str, data: List[Dict[str, Any]]) -> None:
+    def save_table(self, table_name: str, data: List[Dict[str, Any]]) -> None:
         """Save data to a JSON table file"""
-        table_path = self._get_table_path(table_name)
+        table_path = self.get_table_path(table_name)
         with open(table_path, 'w') as f:
             json.dump(data, f, indent=2, default=str)
 
     def _get_next_id(self, table_name: str) -> int:
         """Get the next auto-increment ID for a table"""
-        data = self._load_table(table_name)
+        data = self.load_table(table_name)
         if not data:
             return 1
         return max(item.get('id', 0) for item in data) + 1
 
     def insert(self, table_name: str, record: Dict[str, Any]) -> Dict[str, Any]:
         """Insert a new record into a table"""
-        data = self._load_table(table_name)
+        data = self.load_table(table_name)
 
         # Add auto-increment ID if not present
         if 'id' not in record:
@@ -62,12 +62,12 @@ class JsonDB:
             record['created_at'] = datetime.now().isoformat()
 
         data.append(record)
-        self._save_table(table_name, data)
+        self.save_table(table_name, data)
         return record
 
     def find_one(self, table_name: str, **filters) -> Optional[Dict[str, Any]]:
         """Find one record matching the filters"""
-        data = self._load_table(table_name)
+        data = self.load_table(table_name)
 
         for record in data:
             match = True
@@ -82,7 +82,7 @@ class JsonDB:
 
     def find_all(self, table_name: str, **filters) -> List[Dict[str, Any]]:
         """Find all records matching the filters"""
-        data = self._load_table(table_name)
+        data = self.load_table(table_name)
 
         if not filters:
             return data
@@ -101,7 +101,7 @@ class JsonDB:
 
     def update_one(self, table_name: str, filters: Dict[str, Any], updates: Dict[str, Any]) -> bool:
         """Update one record matching the filters"""
-        data = self._load_table(table_name)
+        data = self.load_table(table_name)
 
         for i, record in enumerate(data):
             match = True
@@ -113,14 +113,14 @@ class JsonDB:
                 # Update the record
                 data[i].update(updates)
                 data[i]['updated_at'] = datetime.now().isoformat()
-                self._save_table(table_name, data)
+                self.save_table(table_name, data)
                 return True
 
         return False
 
     def delete_one(self, table_name: str, **filters) -> bool:
         """Delete one record matching the filters"""
-        data = self._load_table(table_name)
+        data = self.load_table(table_name)
 
         for i, record in enumerate(data):
             match = True
@@ -130,7 +130,7 @@ class JsonDB:
                     break
             if match:
                 data.pop(i)
-                self._save_table(table_name, data)
+                self.save_table(table_name, data)
                 return True
 
         return False
@@ -171,9 +171,9 @@ def create_tables(table_names: List[str] = None):
 
     if table_names:
         for table_name in table_names:
-            table_path = db._get_table_path(table_name)
+            table_path = db.get_table_path(table_name)
             if not table_path.exists():
-                db._save_table(table_name, []) # Create empty JSON array for the table
+                db.save_table(table_name, []) # Create empty JSON array for the table
         print(f"🗄️ JSON Database initialized with tables {table_names}: {db.db_dir}")
     else:
         print(f"🗄️ JSON Database directory initialized: {db.db_dir}")
